@@ -9,7 +9,7 @@
 <style>
 body {
     font-family: Arial;
-    background: linear-gradient(to right, #1a2a6c, #b21f1f, #fdbb2d);
+    background: linear-gradient(to right, #141e30, #243b55);
     color: white;
     text-align: center;
 }
@@ -40,20 +40,20 @@ button {
     position: relative;
 }
 
-.close-btn {
-    position: absolute;
-    top: 5px;
-    right: 10px;
-    cursor: pointer;
-    font-weight: bold;
-}
-
 .vip { background: gold; color: black; }
 .economy { background: #2a5298; }
 .military { background: #355c3a; }
 
 .tab { display: none; }
 .active { display: block; }
+
+.auth-box {
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(255,255,255,0.1);
+    display: inline-block;
+    border-radius: 12px;
+}
 </style>
 </head>
 
@@ -61,15 +61,30 @@ button {
 
 <h1>🎫 Soravia Ticket System</h1>
 
+<!-- AUTH SECTION -->
+<div id="authSection" class="auth-box">
+    <h2>🔐 Admin Login / Register</h2>
+
+    <input id="authUser" placeholder="Username"><br>
+    <input id="authPass" type="password" placeholder="Password"><br>
+
+    <button onclick="registerAdmin()">Register</button>
+    <button onclick="loginAdmin()">Login</button>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" style="display:none;">
+
 <button onclick="showTab('user')">User Panel</button>
 <button onclick="showTab('admin')">Admin Panel</button>
+<button onclick="logout()">Logout</button>
 
 <!-- USER -->
 <div id="user" class="active">
 
 <input id="name" placeholder="Name"><br>
 <input id="datetime" type="datetime-local"><br>
-<input id="location" placeholder="Type Location"><br>
+<input id="location" placeholder="Location"><br>
 
 <select id="style">
     <option value="economy">Economy</option>
@@ -92,24 +107,71 @@ button {
 <div id="adminList"></div>
 </div>
 
+</div>
+
 <script>
 let tickets = JSON.parse(localStorage.getItem("tickets")) || [];
+let admins = JSON.parse(localStorage.getItem("admins")) || [];
+let currentAdmin = JSON.parse(localStorage.getItem("currentAdmin")) || null;
 
-// Prevent past dates
+// init
+if (currentAdmin) {
+    document.getElementById("authSection").style.display = "none";
+    document.getElementById("app").style.display = "block";
+}
+
+// prevent past time
 document.getElementById("datetime").min =
     new Date().toISOString().slice(0,16);
 
-// Load existing tickets
-window.onload = () => {
-    tickets.forEach(ticket => renderUserTicket(ticket));
-    renderAdmin();
-};
-
-function saveTickets() {
+function saveAll() {
     localStorage.setItem("tickets", JSON.stringify(tickets));
+    localStorage.setItem("admins", JSON.stringify(admins));
+    localStorage.setItem("currentAdmin", JSON.stringify(currentAdmin));
 }
 
+/* AUTH */
+function registerAdmin() {
+    const u = document.getElementById("authUser").value;
+    const p = document.getElementById("authPass").value;
+
+    if (!u || !p) return alert("Fill all fields");
+
+    if (admins.find(a => a.user === u)) {
+        return alert("User already exists");
+    }
+
+    admins.push({ user: u, pass: p });
+    saveAll();
+
+    alert("Registered successfully");
+}
+
+function loginAdmin() {
+    const u = document.getElementById("authUser").value;
+    const p = document.getElementById("authPass").value;
+
+    const admin = admins.find(a => a.user === u && a.pass === p);
+
+    if (!admin) return alert("Invalid login");
+
+    currentAdmin = admin;
+    saveAll();
+
+    document.getElementById("authSection").style.display = "none";
+    document.getElementById("app").style.display = "block";
+}
+
+function logout() {
+    currentAdmin = null;
+    localStorage.removeItem("currentAdmin");
+    location.reload();
+}
+
+/* APP */
 function showTab(tab) {
+    if (!currentAdmin) return alert("Login required");
+
     document.getElementById("user").classList.remove("active");
     document.getElementById("admin").classList.remove("active");
     document.getElementById(tab).classList.add("active");
@@ -123,40 +185,32 @@ function generateTicket() {
     const org = document.getElementById("org").value;
     const desc = document.getElementById("desc").value;
 
-    if (!name || !datetime || !location) {
-        alert("Fill required fields!");
-        return;
-    }
-
-    const id = Date.now();
+    if (!name || !datetime || !location) return alert("Fill required");
 
     const ticket = {
-        id, name, datetime, location,
+        id: Date.now(),
+        name, datetime, location,
         style, org, desc,
         status: "Pending"
     };
 
     tickets.push(ticket);
-    saveTickets();
+    saveAll();
 
-    renderUserTicket(ticket);
+    renderTicket(ticket);
     renderAdmin();
 }
 
-function renderUserTicket(ticket) {
+function renderTicket(ticket) {
     const div = document.createElement("div");
     div.className = `ticket ${ticket.style}`;
-    div.id = `ticket-${ticket.id}`;
 
     div.innerHTML = `
-        <span class="close-btn" onclick="deleteTicket(${ticket.id})">❌</span>
-        <h3>🎫 Ticket #${ticket.id}</h3>
-        <p><b>Name:</b> ${ticket.name}</p>
-        <p><b>Location:</b> ${ticket.location}</p>
-        <p><b>Date & Time:</b> ${new Date(ticket.datetime).toLocaleString()}</p>
-        <p><b>Organization:</b> ${ticket.org}</p>
-        <p><b>Description:</b> ${ticket.desc}</p>
-        <p><b>Status:</b> <span id="status-${ticket.id}">${ticket.status}</span></p>
+        <h3>🎫 #${ticket.id}</h3>
+        <p>${ticket.name}</p>
+        <p>${ticket.location}</p>
+        <p>${new Date(ticket.datetime).toLocaleString()}</p>
+        <p>Status: ${ticket.status}</p>
         <div id="qr-${ticket.id}"></div>
     `;
 
@@ -169,41 +223,31 @@ function renderUserTicket(ticket) {
     });
 }
 
-function deleteTicket(id) {
-    tickets = tickets.filter(t => t.id !== id);
-    saveTickets();
-
-    document.getElementById(`ticket-${id}`).remove();
-    renderAdmin();
-}
-
 function renderAdmin() {
-    const adminDiv = document.getElementById("adminList");
-    adminDiv.innerHTML = "";
+    if (!currentAdmin) return;
 
-    tickets.forEach(ticket => {
-        const div = document.createElement("div");
+    const div = document.getElementById("adminList");
+    div.innerHTML = "";
 
-        div.innerHTML = `
-            <p>🎫 #${ticket.id} - ${ticket.name} (${ticket.status})</p>
-            <button onclick="updateStatus(${ticket.id}, 'Approved')">Approve</button>
-            <button onclick="updateStatus(${ticket.id}, 'Rejected')">Reject</button>
+    tickets.forEach(t => {
+        const el = document.createElement("div");
+
+        el.innerHTML = `
+            <p>🎫 ${t.name} (${t.status})</p>
+            <button onclick="updateStatus(${t.id}, 'Approved')">Approve</button>
+            <button onclick="updateStatus(${t.id}, 'Rejected')">Reject</button>
             <hr>
         `;
 
-        adminDiv.appendChild(div);
+        div.appendChild(el);
     });
 }
 
 function updateStatus(id, status) {
-    const ticket = tickets.find(t => t.id === id);
-    ticket.status = status;
+    const t = tickets.find(x => x.id === id);
+    if (t) t.status = status;
 
-    saveTickets();
-
-    const statusEl = document.getElementById(`status-${id}`);
-    if (statusEl) statusEl.innerText = status;
-
+    saveAll();
     renderAdmin();
 }
 </script>
