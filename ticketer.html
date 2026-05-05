@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Soravia Ticket System</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+body {
+    font-family: Arial;
+    background: linear-gradient(to right, #1a2a6c, #b21f1f, #fdbb2d);
+    color: white;
+    text-align: center;
+}
+
+input, select, textarea {
+    padding: 8px;
+    margin: 5px;
+    border-radius: 8px;
+    border: none;
+    width: 220px;
+}
+
+button {
+    padding: 8px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    margin: 5px;
+}
+
+.ticket {
+    margin-top: 20px;
+    padding: 15px;
+    width: 320px;
+    border-radius: 12px;
+    display: inline-block;
+    text-align: left;
+    position: relative;
+}
+
+.close-btn {
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.vip { background: gold; color: black; }
+.economy { background: #2a5298; }
+.military { background: #355c3a; }
+
+.tab { display: none; }
+.active { display: block; }
+</style>
+</head>
+
+<body>
+
+<h1>🎫 Soravia Ticket System</h1>
+
+<button onclick="showTab('user')">User Panel</button>
+<button onclick="showTab('admin')">Admin Panel</button>
+
+<!-- USER -->
+<div id="user" class="active">
+
+<input id="name" placeholder="Name"><br>
+<input id="datetime" type="datetime-local"><br>
+<input id="location" placeholder="Type Location"><br>
+
+<select id="style">
+    <option value="economy">Economy</option>
+    <option value="vip">VIP</option>
+    <option value="military">Military</option>
+</select><br>
+
+<input id="org" placeholder="Organization"><br>
+<textarea id="desc" placeholder="Description"></textarea><br>
+
+<button onclick="generateTicket()">Generate Ticket</button>
+
+<div id="ticketOutput"></div>
+
+</div>
+
+<!-- ADMIN -->
+<div id="admin" class="tab">
+<h2>🛠 Admin Panel</h2>
+<div id="adminList"></div>
+</div>
+
+<script>
+let tickets = JSON.parse(localStorage.getItem("tickets")) || [];
+
+// Prevent past dates
+document.getElementById("datetime").min =
+    new Date().toISOString().slice(0,16);
+
+// Load existing tickets
+window.onload = () => {
+    tickets.forEach(ticket => renderUserTicket(ticket));
+    renderAdmin();
+};
+
+function saveTickets() {
+    localStorage.setItem("tickets", JSON.stringify(tickets));
+}
+
+function showTab(tab) {
+    document.getElementById("user").classList.remove("active");
+    document.getElementById("admin").classList.remove("active");
+    document.getElementById(tab).classList.add("active");
+}
+
+function generateTicket() {
+    const name = document.getElementById("name").value;
+    const datetime = document.getElementById("datetime").value;
+    const location = document.getElementById("location").value;
+    const style = document.getElementById("style").value;
+    const org = document.getElementById("org").value;
+    const desc = document.getElementById("desc").value;
+
+    if (!name || !datetime || !location) {
+        alert("Fill required fields!");
+        return;
+    }
+
+    const id = Date.now();
+
+    const ticket = {
+        id, name, datetime, location,
+        style, org, desc,
+        status: "Pending"
+    };
+
+    tickets.push(ticket);
+    saveTickets();
+
+    renderUserTicket(ticket);
+    renderAdmin();
+}
+
+function renderUserTicket(ticket) {
+    const div = document.createElement("div");
+    div.className = `ticket ${ticket.style}`;
+    div.id = `ticket-${ticket.id}`;
+
+    div.innerHTML = `
+        <span class="close-btn" onclick="deleteTicket(${ticket.id})">❌</span>
+        <h3>🎫 Ticket #${ticket.id}</h3>
+        <p><b>Name:</b> ${ticket.name}</p>
+        <p><b>Location:</b> ${ticket.location}</p>
+        <p><b>Date & Time:</b> ${new Date(ticket.datetime).toLocaleString()}</p>
+        <p><b>Organization:</b> ${ticket.org}</p>
+        <p><b>Description:</b> ${ticket.desc}</p>
+        <p><b>Status:</b> <span id="status-${ticket.id}">${ticket.status}</span></p>
+        <div id="qr-${ticket.id}"></div>
+    `;
+
+    document.getElementById("ticketOutput").appendChild(div);
+
+    new QRCode(document.getElementById(`qr-${ticket.id}`), {
+        text: JSON.stringify(ticket),
+        width: 100,
+        height: 100
+    });
+}
+
+function deleteTicket(id) {
+    tickets = tickets.filter(t => t.id !== id);
+    saveTickets();
+
+    document.getElementById(`ticket-${id}`).remove();
+    renderAdmin();
+}
+
+function renderAdmin() {
+    const adminDiv = document.getElementById("adminList");
+    adminDiv.innerHTML = "";
+
+    tickets.forEach(ticket => {
+        const div = document.createElement("div");
+
+        div.innerHTML = `
+            <p>🎫 #${ticket.id} - ${ticket.name} (${ticket.status})</p>
+            <button onclick="updateStatus(${ticket.id}, 'Approved')">Approve</button>
+            <button onclick="updateStatus(${ticket.id}, 'Rejected')">Reject</button>
+            <hr>
+        `;
+
+        adminDiv.appendChild(div);
+    });
+}
+
+function updateStatus(id, status) {
+    const ticket = tickets.find(t => t.id === id);
+    ticket.status = status;
+
+    saveTickets();
+
+    const statusEl = document.getElementById(`status-${id}`);
+    if (statusEl) statusEl.innerText = status;
+
+    renderAdmin();
+}
+</script>
+
+</body>
+</html>
